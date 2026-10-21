@@ -1,0 +1,14 @@
+
+# Local firmware secrets
+firmware/secrets.h
+
+# Local dashboard environment
+dashboard/.env
+
+# Node.js dependencies
+dashboard/node_modules/
+
+# Editor and operating system files
+.vscode/
+.DS_Store
+Thumbs.db
