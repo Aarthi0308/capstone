@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Environment Monitor</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: #f3f6fa;
+      color: #1e293b;
+    }
+
+    main {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    .muted { color: #64748b; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .card {
+      background: white;
+      padding: 22px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px #0000000a;
+    }
+
+    .value {
+      font-size: 34px;
+      font-weight: bold;
+      margin: 12px 0;
+    }
+
+    .status { font-weight: bold; }
+    .online { color: #15803d; }
+    .offline { color: #b91c1c; }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      margin-top: 12px;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+    }
+
+    th { background: #e8eef6; }
+  </style>
+</head>
+
+<body>
+<main>
+  <h1>IoT Environment Monitor</h1>
+  <p class="muted">
+    Live temperature and humidity from an ESP32 device
+  </p>
+
+  <p>
+    MQTT status:
+    <span id="status" class="status offline">Connecting...</span>
+  </p>
+
+  <p class="muted">
+    Last reading: <span id="lastSeen">No data received</span>
+  </p>
+
+  <section class="cards">
+    <article class="card">
+      <div>Temperature</div>
+      <div id="temperature" class="value">-- °C</div>
+      <div class="muted">Latest sensor reading</div>
+    </article>
+
+    <article class="card">
+      <div>Humidity</div>
+      <div id="humidity" class="value">-- %</div>
+      <div class="muted">Relative humidity</div>
+    </article>
+
+    <article class="card">
+      <div>Readings received</div>
+      <div id="count" class="value">0</div>
+      <div class="muted">Recent readings in memory</div>
+    </article>
+  </section>
+
+  <h2>Recent readings</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time received</th>
+          <th>Temperature</th>
+          <th>Humidity</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr>
+          <td colspan="3">Waiting for sensor data...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  let readings = [];
+
+  const statusEl = document.getElementById("status");
+  const lastSeenEl = document.getElementById("lastSeen");
+  const rowsEl = document.getElementById("rows");
+
+  function setStatus(status) {
+    statusEl.textContent = status;
+    statusEl.className =
+      "status " + (status === "connected" ? "online" : "offline");
+  }
+
+  function render(data) {
+    readings = data.slice(-50);
+
+    if (readings.length === 0) {
+      rowsEl.replaceChildren();
+
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 3;
+      cell.textContent = "Waiting for sensor data...";
+      row.appendChild(cell);
+      rowsEl.appendChild(row);
+
+      document.getElementById("temperature").textContent = "-- °C";
+      document.getElementById("humidity").textContent = "-- %";
+      document.getElementById("count").textContent = "0";
+      lastSeenEl.textContent = "No data received";
+      return;
+    }
+
+    const latest = readings[readings.length - 1];
+
+    document.getElementById("temperature").textContent =
+      latest.temperature.toFixed(1) + " °C";
+
+    document.getElementById("humidity").textContent =
+      latest.humidity.toFixed(1) + " %";
+
+    document.getElementById("count").textContent = readings.length;
+
+    lastSeenEl.textContent =
+      new Date(latest.receivedAt).toLocaleString();
+
+    rowsEl.replaceChildren();
+
+    readings.slice().reverse().forEach((item) => {
+      const row = document.createElement("tr");
+
+      const values = [
+        new Date(item.receivedAt).toLocaleTimeString(),
+        item.temperature.toFixed(1) + " °C",
+        item.humidity.toFixed(1) + " %"
+      ];
+
+      values.forEach((value) => {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.appendChild(cell);
+      });
+
+      rowsEl.appendChild(row);
+    });
+  }
+
+  socket.on("connect", () => setStatus("connected"));
+  socket.on("disconnect", () => setStatus("offline"));
+  socket.on("connection-status", setStatus);
+  socket.on("history", render);
+</script>
+</body>
+</html>
